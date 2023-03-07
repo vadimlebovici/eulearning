@@ -126,3 +126,66 @@ def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 				filtrations.append(func)
 		vec_sts.append(build_vectorized_st_from_adjacency_matrix(A, filtrations))
 	return vec_sts, y
+
+#%% Toy datasets
+import tadasets
+import dpp
+from data_gen_curvature import distance_matrix
+def gen_torus_unif(N_pts, noise, a, c): #torus has random sizes drawn in a and c intervals
+    a = a[0]+(a[1]-a[0])*np.random.rand() 
+    c = c[0]+(c[1]-c[0])*np.random.rand()
+    X = np.zeros((N_pts, 3))
+    n_filled = 0
+    while n_filled <N_pts:
+        theta = np.random.uniform(0, 2*np.pi)
+        eta = np.random.uniform(0, 1/np.pi)
+        fx = (1+(a/c)*np.cos(theta))/(2*np.pi)
+        if eta < fx:
+            phi = np.random.uniform(0, 2*np.pi)
+            X[n_filled] = [(c+a*np.cos(theta))*np.cos(phi),(c+a*np.cos(theta))*np.sin(phi), a*np.sin(theta)]
+            n_filled+=1
+    return X+noise*np.random.randn(*X.shape)
+
+def gen_torus_non_unif(N_pts, noise, a, c): #torus has random sizes drawn in a and c intervals
+    a = a[0]+(a[1]-a[0])*np.random.rand() 
+    c = c[0]+(c[1]-c[0])*np.random.rand()
+    theta = np.random.uniform(0, 2*np.pi, size = N_pts)
+    phi = np.random.uniform(0,2*np.pi, size = N_pts)
+    X = np.zeros((N_pts, 3))
+    X[:,0] = (c+a*np.cos(theta))*np.cos(phi)
+    X[:,1] = (c+a*np.cos(theta))*np.sin(phi)
+    X[:,2] = a*np.sin(theta)
+    return X+noise*np.random.randn(*X.shape)
+
+def gen_sphere_non_unif(N_pts, noise, r): #sphere has random radius drawn in r interval
+    r = r[0]+ (r[1]-r[0])*np.random.rand() 
+    theta = np.random.uniform(0, np.pi, size = N_pts)
+    phi = np.random.normal(loc = np.pi, scale = 2, size = N_pts)%(2*np.pi)
+    X=np.zeros((N_pts, 3))
+    X[:,0] = r*np.sin(phi)*np.cos(theta)
+    X[:,1] = r*np.sin(phi)*np.sin(theta)
+    X[:,2] = r*np.cos(phi)
+    return X+noise*np.random.randn(*X.shape)
+
+
+def gen_sphere(N_pts, noise, r): #sphere has random radius drawn in r interval
+    r = r[0]+ (r[1]-r[0])*np.random.rand() 
+    return tadasets.dsphere(N_pts,2,  r, noise)
+
+def gen_gin_disk(N_pts): #generate ginibre point process on the disk
+    X = dpp.sample(N_pts, kernel=dpp.kernels['ginibre'], quiet=True)
+    X_gin=np.zeros((len(X), 2))
+    X_gin[:,0]=np.real(X)
+    X_gin[:,1]=np.imag(X)
+    return X_gin
+
+def gen_ppp_disk(radius, n_pts): #generate PPP on the disk
+    R = radius*np.sqrt(np.random.rand(n_pts))
+    theta = 2*np.pi*np.random.rand(n_pts)
+    X=np.zeros((n_pts, 2))
+    X[:,0]=R*np.cos(theta)
+    X[:,1]=R*np.sin(theta)
+    return X
+
+def gen_curvature_DM(K, n_pts): #generate distance matrix of n_pts on a space of curvature K
+    return distance_matrix(K, n_pts)

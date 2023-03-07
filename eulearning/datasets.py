@@ -131,23 +131,23 @@ def build_vectorized_st_from_adjacency_matrix(A, filtrations):
 			vec_st[id_edge,idf+1] = np.max(np.take(f, [x, ys[idx]])) # Compute the upper star filtration on vertices of the edge
 	return vec_st
 
-def _extract_intrinsic_funcs_DHFR(): 
+def _extract_intrinsic_funcs_DHFR(path_to_dataset): 
 	'''
 	Method extracting the functions defined on the nodes of DHFR and save them in a .txt file. 
 	'''
-	id_table = np.loadtxt('./data/DHFR/DHFR.graph_idx')
-	funct = np.loadtxt('./data/DHFR/DHFR.node_attrs', delimiter=',')
-	path_dataset = "./data/DHFR/"
-	os.mkdir('./data/DHFR/func_0/')
-	os.mkdir('./data/DHFR/func_1/')
-	os.mkdir('./data/DHFR/func_2/')
+	id_table = np.loadtxt(path_to_dataset + 'DHFR.graph_idx')
+	funct = np.loadtxt(path_to_dataset + 'DHFR.node_attrs', delimiter=',')
+	path_dataset = path_to_dataset + ""
+	os.mkdir(path_to_dataset + 'func_0/')
+	os.mkdir(path_to_dataset + 'func_1/')
+	os.mkdir(path_to_dataset + 'func_2/')
 	for k, graph_name in enumerate(os.listdir(path_dataset + "mat/")):
 		gid = int(graph_name.split('_')[5])
 		X=np.where(id_table==gid)
 		f=funct[X]
-		np.savetxt('./data/DHFR/func_0/f_{}'.format(k), f[:,0])
-		np.savetxt('./data/DHFR/func_1/f_{}'.format(k), f[:,1])
-		np.savetxt('./data/DHFR/func_2/f_{}'.format(k), f[:,2])
+		np.savetxt(path_to_dataset + 'func_0/f_{}'.format(k), f[:,0])
+		np.savetxt(path_to_dataset + 'func_1/f_{}'.format(k), f[:,1])
+		np.savetxt(path_to_dataset + 'func_2/f_{}'.format(k), f[:,2])
 
 def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 	'''
@@ -190,7 +190,7 @@ def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 				ind = int(filt.split('_')[-1])
 				path_to_file = path_to_dataset + '/func_' + str(ind) + '/f_' + str(k)
 				if not os.path.isfile(path_to_file):
-					_extract_intrinsic_funcs_DHFR()
+					_extract_intrinsic_funcs_DHFR(path_to_dataset)
 				func = np.loadtxt(path_to_file)
 				filtrations.append(func)
 		vec_sts.append(build_vectorized_st_from_adjacency_matrix(A, filtrations))

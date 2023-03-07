@@ -149,14 +149,14 @@ def _extract_intrinsic_funcs_DHFR(path_to_dataset):
 		np.savetxt(path_to_dataset + 'func_1/f_{}'.format(k), f[:,1])
 		np.savetxt(path_to_dataset + 'func_2/f_{}'.format(k), f[:,2])
 
-def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
+def load_graph_dataset(dataset, path_to_dataset, chosen_filtrations):
 	'''
 	Load a graph dataset from https://networkrepository.com/. Dataset has to be in the 'mat' format, available for the datasets 'MUTAG', 'COX2', 'DHFR', 'PROTEINS', 'NCI1', 'NCI109','IMDB-BINARY' and 'IMDB-MULTI' on the Perslay repository https://github.com/MathieuCarriere/perslay.
 	
 	Input:
 		dataset				: str, name of the dataset
 		path_to_dataset		: str, path to the mat/ folder containing th .mat format of the graphs
-		name_filtrations	: list of str, name of filtrations. Available options are 'hks_time' for the heat kernel signature, 'ricci_alpha_iterations' for the Ollivier-Ricci curvature, 'forman' for the Forman-Ricci curvature, 'centrality' for the centrality function, 'betweenness' for the edge betweenness and 'func_ind' for the ind-th function pre-defined on the graphs of this specific dataset. For instance, 'hks_10.0', 'ricci_0.5_0', 'forman', 'centrality', 'betweenness', 'func_0'.
+		chosen_filtrations	: list of str, name of chosen filtrations. Available options are 'hks_time' for the heat kernel signature, 'ricci_alpha_iterations' for the Ollivier-Ricci curvature, 'forman' for the Forman-Ricci curvature, 'centrality' for the centrality function, 'betweenness' for the edge betweenness and 'func_ind' for the ind-th function pre-defined on the graphs of this specific dataset. For instance, 'hks_10.0', 'ricci_0.5_0', 'forman', 'centrality', 'betweenness', 'func_0'.
 	Output:
 		vec_sts				: list of ndarray of size (num_vertices+num_edges, 1+len(filtrations)) as returned by build_vectorized_st_from_adjacency_matrix. For each simplex splx, it contains a line [(-1)*dim(splx), filt_1(splx), ..., filt_n(splx)] where filt_j is the upper star filtration induced by the j-th filtrations.
 		y					: ndarray of size (N,) where N is the number of graphs in the dataset. Contains the labels of the graphs.
@@ -171,7 +171,7 @@ def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 		y.append(label)
 
 		filtrations = []
-		for filt in name_filtrations:
+		for filt in chosen_filtrations:
 			if 'hks' in filt: 										# of the form 'hks_time'
 				time = float(filt.split('_')[-1])
 				filtrations.append(compute_hks_signature(A, time))

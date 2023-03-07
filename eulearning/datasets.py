@@ -1,10 +1,15 @@
 import os
-import tadasets
 import numpy 			as np
+import numba 			as _nb
+import sys 				as _sys
+import tadasets
 
+from scipy 				import special as _special
+from scipy 				import optimize as _optimize
 from scipy.io 			import loadmat
-from .utils				import compute_OR_curvature, compute_FR_curvature, compute_hks_signature, compute_laplacian_eigenvector, compute_closeness_centrality, compute_edge_betweenness
+from .utils				import compute_OR_curvature, compute_FR_curvature, compute_hks_signature, compute_closeness_centrality, compute_edge_betweenness
 from sklearn.metrics 	import pairwise_distances
+from collections		import namedtuple as _namedtuple
 
 # Toy example: dense lines in background noise
 def gen_dense_lines_with_noise(n_pattern=1, n_noise=500, n_signal=20, size_signal=10, size_noise=50):
@@ -178,7 +183,7 @@ def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 				filtrations.append(compute_closeness_centrality(A))
 			if 'betweenness' in filt:
 				filtrations.append(compute_edge_betweenness(A))
-			if 'func' in filt:										# of the form 'func_ind'
+			if 'func' in filt:										# of the form 'func_ind'. See demos/graphs.ipynb for an explanation on how to compute them.
 				ind = int(filt.split('_')[-1])
 				func = np.loadtxt(path_to_dataset + '/func_' + str(ind) + '/f_' + str(k))
 				filtrations.append(func)
@@ -265,7 +270,6 @@ def gen_curvature_pt_cld(n_pts, K):
 # (at your option) any later version.                                  #
 #                  http://www.gnu.org/licenses/                        #
 #**********************************************************************#
-import numba as _nb
 
 @_nb.njit((_nb.complex128[::1], _nb.int64[::1], _nb.complex128[:,::1], _nb.float64[::1], _nb.int64, _nb.int64))
 def _instantiate_polynomial(p, I, M, G, l, u):
@@ -370,7 +374,6 @@ def sample_points(kernel, R, I, epsilon=2**-53, print_point=lambda x,y,i:None):
 # F(i,r) can be defined up to a function of i independant of r such that F(i, sup r) <= 1
 # g(i,r) can be defined up to a function of r independant of i
 # F and g should be callable with arrays as the first argument
-from collections import namedtuple as _namedtuple
 Kernel = _namedtuple('Kernel', ['F','g'])
 
 kernels = {
@@ -435,9 +438,6 @@ if __name__ == '__main__':
         print("Importing libraries ...")
 
 # Util functions compiled with numba
-import sys as _sys
-from scipy import special as _special
-from scipy import optimize as _optimize
 
 def _argtruncate(v, epsilon):
     vbig = abs(v) > epsilon

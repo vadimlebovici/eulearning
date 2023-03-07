@@ -1,10 +1,21 @@
 import numpy as np
 
-from eulearning.utils 	import cartesian_product
 from sklearn.base 		import BaseEstimator, TransformerMixin
 from sklearn.utils 		import assert_all_finite
 
+# Technical details
+def cartesian_product(*arrays): 
+	'''
+	Given several ndarrays, this function returns a single ndarray of shape (product of input shapes, number of input arrays) and representing the points (in coordinates) of the cartesian product of the arrays in lexicographic order.
+	'''
+	la = len(arrays)
+	dtype = np.result_type(*arrays)
+	arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
+	for i, a in enumerate(np.ix_(*arrays)):
+		arr[...,i] = a
+	return arr.reshape(-1, la)
 
+# Computation of Euler characteristic descriptors
 def compute_euler_curve(vec_st, bin_size): 
 	'''
 	This version is faster in practice when computing Euler curves. It works similarly as compute_euler_profile, documented below. 

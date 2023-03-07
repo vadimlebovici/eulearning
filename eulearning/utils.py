@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 
@@ -8,18 +7,6 @@ from scipy.sparse		   					import csgraph
 from scipy.linalg		   					import eigh
 from GraphRicciCurvature.OllivierRicci 		import OllivierRicci
 from GraphRicciCurvature.FormanRicci 		import FormanRicci
-
-# Technical details
-def cartesian_product(*arrays): 
-	'''
-	Given several ndarrays, this function returns a single ndarray of shape (product of input shapes, number of input arrays) and representing the points (in coordinates) of the cartesian product of the arrays in lexicographic order.
-	'''
-	la = len(arrays)
-	dtype = np.result_type(*arrays)
-	arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
-	for i, a in enumerate(np.ix_(*arrays)):
-		arr[...,i] = a
-	return arr.reshape(-1, la)
 
 # Filtrations and multi-parameter persistence
 ## Point clouds
@@ -65,7 +52,7 @@ def compute_FR_curvature(A): # Computes Forman-Ricci curvature
 	curv_edges = np.nan_to_num(curv_edges, copy=True, nan=0.0, posinf=None, neginf=None)
 	if len(curv_edges)==0: 
 		return np.zeros(n_vertices)
-	return get_vertvals_from_edgevals(n_vertices, list(G.edges()), curv_edges)
+	return compute_vertvals_from_edgevals(n_vertices, list(G.edges()), curv_edges)
 
 def compute_OR_curvature(A, alpha=0.5, iterations=0): # Computes Ollivier-Ricci curvature if iterations=0 and Ollivier-Ricci flow if iterations>0
 	G = nx.to_networkx_graph(A)
@@ -87,11 +74,6 @@ def compute_hks_signature(A, time): # Computes Heat Kernel Signature on graphs
 	eigenvals = np.flipud(egvals)
 	eigenvectors = np.fliplr(egvectors)
 	return np.square(eigenvectors).dot(np.diag(np.exp(-time * eigenvals))).sum(axis=1)
-
-def compute_laplacian_eigenvector(A, ind): # Computes Eigenvectors of graph Laplacian
-	L = csgraph.laplacian(A, normed=True)
-	egvals, egvectors = eigh(L)
-	return egvectors[ind]
 
 def compute_closeness_centrality(A): # Compute closeness centrality
 	G=nx.to_networkx_graph(A)

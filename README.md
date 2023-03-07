@@ -8,7 +8,7 @@
 
 - `descriptors.py` contains the scikit-learn transformers computing Euler characteristic tools.
 
-- `datasets.py` contains all the datasets used in our article, at the exception of graph datasets which come from [here](https://networkrepository.com/) and can be downloaded at the right format from the [Perslay repository](https://github.com/MathieuCarriere/perslay). One graph dataset is included for a demo.
+- `datasets.py` contains all datasets used in our article, at the exception of graph datasets which come from [here](https://networkrepository.com/) and can be downloaded at the right format from the [Perslay repository](https://github.com/MathieuCarriere/perslay). One graph dataset is included for a demo. 
 
 - `utils.py` contains auxilary but necessary functions. For instance, in contains a way to compute multi-parameter filtrations in the form of vectorized simplex trees.
 

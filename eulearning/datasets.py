@@ -1,8 +1,6 @@
 import os
 import tadasets
-import dpp
 import numpy 			as np
-from data_gen_curvature import distance_matrix
 
 from scipy.io 			import loadmat
 from .utils				import compute_OR_curvature, compute_FR_curvature, compute_hks_signature, compute_laplacian_eigenvector, compute_closeness_centrality, compute_edge_betweenness
@@ -73,28 +71,6 @@ def gen_sphere_non_unif(n_pts, noise, r): #sphere has random radius drawn in r i
 	X[:,2] = r*np.cos(phi)
 	return X + noise*np.random.randn(*X.shape)
 
-# Toy example: Poisson and Ginibre point clouds
-def gen_Ginibre(n_pts, radius): 
-	'''
-	Generates a Ginibre point process on the centered disk of a given radius.
-	'''
-	X = dpp.sample(n_pts, kernel=dpp.kernels['ginibre'], quiet=True)
-	X_gin = np.zeros((len(X), 2))
-	X_gin[:,0] = np.real(X)
-	X_gin[:,1] = np.imag(X)
-	return radius*X_gin/np.sqrt(n_pts)
-
-def gen_Poisson(n_pts, radius): 
-	'''
-	Generates a Poisson point process on the centered disk of a given radius.
-	'''
-	R = radius*np.sqrt(np.random.rand(n_pts))
-	theta = 2*np.pi*np.random.rand(n_pts)
-	X = np.zeros((n_pts, 2))
-	X[:,0] = R*np.cos(theta)
-	X[:,1] = R*np.sin(theta)
-	return X
-
 # Orbit5K dataset
 def gen_orbit(n_pts, rho):
 	'''
@@ -122,7 +98,7 @@ def gen_orbit5K(rhos=[2.5, 3.5, 4.0, 4.1, 4.3], n_pts=1000, size_each=1000):
 			y.append(i)
 	return X, y
 
-# Graphs dataset
+# Graph datasets
 def build_vectorized_st_from_adjacency_matrix(A, filtrations):
 	'''
 	Build vectorized simplex trees from the adjacency matrix of a graph with num_vertices vertices and num_edges edges.
@@ -209,8 +185,7 @@ def load_graph_dataset(dataset, path_to_dataset, name_filtrations):
 		vec_sts.append(build_vectorized_st_from_adjacency_matrix(A, filtrations))
 	return vec_sts, y
 
-# Curvature datasets.
-
+# Curvature datasets
 def modulus(curvature, u_vect): 
 	'''
 	Computes the radius of a point in polar coordinates for an arbitrary center, CDF inversion method.
@@ -277,3 +252,353 @@ def gen_curvature_pt_cld(n_pts, K):
 	Generates distance matrix of n_pts uniformly drawn on a space of constant curvature K.
 	'''
 	return distance_matrix(K, n_pts)
+
+
+# Toy example: Poisson and Ginibre point clouds
+# To compute GPP and PPP, we need the following functions from the repository https://gitlab.inria.fr/gmoro/point_process/
+#**********************************************************************#
+#    Copyright (C) 2020 Guillaume Moroz <guillaume.moroz@inria.fr>     #
+#                                                                      #
+# This program is free software: you can redistribute it and/or modify #
+# it under the terms of the GNU General Public License as published by #
+# the Free Software Foundation, either version 2 of the License, or    #
+# (at your option) any later version.                                  #
+#                  http://www.gnu.org/licenses/                        #
+#**********************************************************************#
+import numba as _nb
+
+@_nb.njit((_nb.complex128[::1], _nb.int64[::1], _nb.complex128[:,::1], _nb.float64[::1], _nb.int64, _nb.int64))
+def _instantiate_polynomial(p, I, M, G, l, u):
+    for i in range(l, u):
+        for j in range(i, u):
+            p[I[j]-I[i]] += M[i,j]*G[i]*G[j]
+
+@_nb.njit((_nb.complex128[:,::1], _nb.complex128[::1], _nb.complex128[::1]))
+def _fused_minus_outer(V, e, f):
+    for i in range(V.shape[0]):
+        for j in range(V.shape[1]):
+            V[i,j] -= e[i]*f[j]
+
+@_nb.guvectorize([(_nb.complex128[::1], _nb.complex128, _nb.complex128[::1], _nb.complex128[::1])],
+                '(n),(),(n)->(n)')
+def _fused_minus_outer_vec(v, c, f, res):
+        for j in range(res.shape[0]):
+            res[j] = v[j] - c*f[j]
+
+def _V_minus_e_estar(V, e, epsilon):
+        l, u = _argtruncate(e, epsilon)
+        f = e.conjugate()
+        if u-l > 0.9*len(e):
+            _fused_minus_outer(V, e, f)
+        else:
+            _fused_minus_outer_vec(V[l:u, l:u], e[l:u], f[l:u], out=V[l:u, l:u])
+
+@_nb.njit((_nb.complex128[::1], _nb.complex128))
+def _horner(p, v):
+    c = p[-1]
+    for i in range(len(p)-2, -1, -1):
+        c = c*v + p[i]
+    return c
+
+
+# Main Sampling functions
+def sample_indices(kernel, R, epsilon=2**-53):
+    I = []
+    Lambda = 1
+    i = 0
+    R2 = R**2
+    while Lambda > epsilon:
+        Lambda = kernel.F(i, R2)
+        if np.random.binomial(1, Lambda) == 1:
+            I.append(i)
+        i += 1
+    return np.array(I, dtype='int64')
+
+def sample_module(C, R, I, invLambdas, F, epsilon):
+    i = np.random.multinomial(1, C).argmax()
+    c = np.random.uniform()
+    f = lambda r: F(I[i], r**2)*invLambdas[i] - c
+    r = _optimize.brentq(f, 0, R, xtol=epsilon)
+    return r
+
+def sample_argument(V, r, I, invLambdas, g, epsilon):
+    G = g(I,r)*np.sqrt(invLambdas)
+    l, u = _argtruncate(G, epsilon)
+    p = np.zeros(I[u-1] - I[l] + 1, dtype='complex128')
+    _instantiate_polynomial(p, I, V, G, l, u)
+    p[1:] /= 0.5*p[0]*1j*np.arange(1, p.size)
+    p[0] = -np.sum(p[1:])
+    n = np.arange(p.size)
+    c = np.random.uniform()
+    f = lambda alpha: alpha + np.real(_horner(p, np.exp(1j*alpha))) - c*2*np.pi
+    alpha = _optimize.brentq(f, 0, 2*np.pi, xtol=epsilon)
+    return alpha
+
+def sample_points(kernel, R, I, epsilon=2**-53, print_point=lambda x,y,i:None):
+    global points_list
+    F, g = kernel
+    n = len(I)
+    W = np.zeros(n, dtype='complex128')
+    U = np.ones(n, dtype='float64')
+    V = np.identity(n, dtype='complex128')
+    Lambdas = np.array([F(i, R**2) for i in I])
+    invLambdas = 1/Lambdas
+    for i in range(n, 0, -1):
+        # Draw point Wi
+        r = sample_module(U/U.sum(), R, I, invLambdas, F, epsilon)
+        alpha = sample_argument(V, r, I, invLambdas, g, epsilon)
+        p = r*np.exp(1j*alpha)
+        W[n-i] = p
+        px = p.real
+        py = p.imag
+        print_point(px, py, n-i)
+
+        # Compute new vector ei
+        phi = g(I,r)*np.exp(1j*alpha*I)*np.sqrt(invLambdas)
+        l, u = _argtruncate(phi, epsilon)
+        phi = V[:, l:u].dot(phi[l:u])
+        e = phi/np.linalg.norm(phi)
+
+        # Update arrays U and V
+        U -= e.real**2 + e.imag**2
+        U[U<0] = 0
+        _V_minus_e_estar(V, e, epsilon)
+    return V, W
+
+# Kernels
+# Use notations of the article : g(i,r) = sqrt(dF/dr(i,r**2))
+# F(i,r) can be defined up to a function of i independant of r such that F(i, sup r) <= 1
+# g(i,r) can be defined up to a function of r independant of i
+# F and g should be callable with arrays as the first argument
+from collections import namedtuple as _namedtuple
+Kernel = _namedtuple('Kernel', ['F','g'])
+
+kernels = {
+    # Ginibre point process
+    'ginibre': Kernel(lambda i, r: _special.gammainc(i+1,r),
+                      lambda i, r: np.where(i!=0, np.exp(i*np.log(r) - 0.5*(_special.gammaln(i+1) + r**2)),
+                                                   np.exp(-0.5*r**2))),
+
+    # Zeros of an analytic function with Gaussian coefficients
+    'gaussian': Kernel(lambda i, r: np.power(r,i+1),
+                       lambda i, r: np.power(r,i)*np.sqrt(i+1)),
+
+    ## Experimental kernels
+    # Gaussian kernel times 1 - r**2
+    'weighted': Kernel(lambda i, r: 3*(np.power(r,i+1) - 2*np.power(r, i+2)*(i+1)/(i+2) + np.power(r, i+3)*(i+1)/(i+3)),
+                       lambda i, r: np.power(r,i)*np.sqrt(i+1)),
+
+    # Uniform modules
+    'pseudo-uniform': Kernel(lambda i, r: r,
+                             lambda i, r: 1),
+}
+
+# Parser  for command line arguments
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('R', type=float, help="radius",
+                        default=1)
+    parser.add_argument('-N', metavar='N', type=int,
+                        help="preset N points by truncating the kernel to the N first eigenfunctions",
+                        default=None)
+    parser.add_argument('-k', '--kernel', metavar='kernel', type=str,
+                        help='kernel to sample : ginibre or gaussian',
+                        default='ginibre')
+    parser.add_argument('-p', '--precision', metavar='prec  ', type=float,
+                        help="error tolerated for internal computations",
+                        default=2**-53)
+    parser.add_argument('-s', '--size', metavar='size  ', type=float,
+                        help="points size in pixels",
+                        default=5)
+    parser.add_argument('-t', '--time', metavar='time  ', type=int,
+                        help="refresh time in miliseconds",
+                        default=100)
+    parser.add_argument('-o', '--output', metavar='output', type=str,
+                        help='name of file to output the data, implies --nogui',
+                        default=None)
+    parser.add_argument('-e ', '--error', action='store_true',
+                        help="compute the error and the condition number for the result",
+                        default=False)
+    parser.add_argument('-pg', '--profile', action='store_true',
+                        help="output time indicator some functions",
+                        default=False)
+    parser.add_argument('-q ', '--quiet', action='store_true',
+                        help="disable information messages on standard output",
+                        default=False)
+    parser.add_argument('--nogui', action='store_true',
+                        help="output points coordinate on the terminal",
+                        default=False)
+    args = parser.parse_args()
+    if not args.quiet:
+        print("Importing libraries ...")
+
+# Util functions compiled with numba
+import sys as _sys
+from scipy import special as _special
+from scipy import optimize as _optimize
+
+def _argtruncate(v, epsilon):
+    vbig = abs(v) > epsilon
+    l = np.argmax(vbig)
+    u = len(vbig) - np.argmax(vbig[::-1])
+    return l, u
+
+# Qt interface functions
+def _init_figure(R, size):
+    global _scatter, _view, _spot, _app
+    # Launch app
+    pg.setConfigOptions(background = 'w', foreground = 'k')
+    _app = pg.mkQApp()
+
+    # Create the main view
+    _view = pg.PlotWidget()
+    _view.setRenderHint(pg.Qt.QtGui.QPainter.HighQualityAntialiasing)
+    _view.resize(800, 600)
+    _view.setRange(xRange=(-R,R), yRange=(-R,R))
+    _view.setWindowTitle('Determinantal point process')
+    _view.setTitle('Sampling the number of points ...')
+    _view.setAspectLocked(True)
+    _view.show()
+    
+    # Create the circle and add it to the view
+    circle = pg.Qt.QtWidgets.QGraphicsEllipseItem()
+    circle.setRect(-R, -R, 2*R, 2*R)
+    circle.setPen(pg.mkPen(width=2, color='k'))
+    _view.addItem(circle)
+    
+    # Create the scatter plot and add it to the view
+    _scatter = pg.ScatterPlotItem(symbol='o')
+    _scatter.setSize(size)
+    _view.addItem(_scatter)
+
+    # Spot
+    _spot = np.empty(1, dtype=_scatter.data.dtype)
+    _spot['pen'] = pg.mkPen(width=1, color='b')
+    _spot['brush'] = pg.mkBrush(None)
+    _spot['size'] = size
+    _spot['visible'] = True
+    if pg.Qt.QT_LIB not in ['PySide2', 'PySide6']:
+        _spot['targetQRectValid'] = False
+    _scatter.updateSpots(_spot)
+
+    _app.processEvents()
+
+def _update_figure():
+    global _scatter, _view, npoints
+    pad =  len(str(npoints))
+    _view.setTitle('<pre>Sampling: {0: >{2}}/{1} points</pre>'.format(_scatter.data.size, npoints, pad))
+    _scatter.prepareGeometryChange()
+    _scatter.bounds = [None, None]
+
+def _print_point_qt(px, py, i):
+    _scatter.data.resize(i+1, refcheck=False)
+    _scatter.data[i] = _spot
+    if pg.Qt.QT_LIB not in ['PySide2', 'PySide6']:
+        _scatter.data[i]['targetQRect'] = pg.Qt.QtCore.QRectF()
+    _scatter.data[i]['x'] = px
+    _scatter.data[i]['y'] = py
+    _app.processEvents()
+
+def qt_sample(R, N = None, kernel=kernels['ginibre'], precision=2**-53, size=5, refresh=100, error=False, quiet=False):
+    global npoints, pg
+    import pyqtgraph as pg
+    if N is not None and kernel.F(N-1, R**2) == 0:
+        raise ValueError("N is too big")
+    _init_figure(R, size)
+    if N is None:
+        I = sample_indices(kernel, R, precision)
+    else:
+        I = np.arange(N)
+    npoints = len(I)
+    timer = pg.Qt.QtCore.QTimer()
+    timer.timeout.connect(_update_figure)
+    timer.start(refresh)
+    V, W = sample_points(kernel, R, I, precision, _print_point_qt)
+    timer.stop()
+    _update_figure()
+    _app.processEvents()
+    if error:
+        _view.setTitle('Computing the error and the condition number ...')
+        _app.processEvents()
+        Error = np.linalg.norm(V)
+        tI = I.reshape(-1,1)
+        M = kernel.g(tI, np.abs(W))*np.exp(1j*np.angle(W)*tI)/np.sqrt(kernel.F(tI, R**2))
+        ConditionNumber = np.linalg.cond(M)
+        _view.setTitle('<pre>Number of points: {0}        Error: {1:.3e}        Condition number: {2:.3e}</pre>'
+                      .format(npoints, Error, ConditionNumber))
+    else:
+        _view.setTitle('<pre>Number of points: {0}</pre>'.format(npoints))
+    Blue = pg.mkBrush('b')
+    _scatter.setBrush([Blue]*len(_scatter.data))
+    _app.exec_()
+
+# Text interface functions
+def _build_print_point(output, quiet, n):
+    pad =  len(str(n))
+    message = '\r{{0: >{0}}}/{1} '.format(pad, n)
+    if output is None and quiet:
+        print_point_txt = lambda x, y, i: None
+    elif output is None and not quiet:
+        print_point_txt = lambda x, y, i: _sys.stdout.write(message.format(i+1))
+    elif output is not None and quiet:
+        print_point_txt = lambda x, y, i: output.write("{0} {1}\n".format(x, y))
+    else:
+        print_point_txt = lambda x, y, i: _sys.stdout.write(message.format(i+1)) and output.write("{0} {1}\n".format(x, y))
+    return print_point_txt
+
+def sample(R, N = None, kernel=kernels['ginibre'], precision=2**-53, error=False, quiet=False, output=None):
+    if N is None:
+        if not quiet:
+            print('Sampling the number of points ...')
+        I = sample_indices(kernel, R, precision)
+    else:
+        if kernel.F(N-1, R**2) == 0:
+            raise ValueError("N is too big")
+        I = np.arange(N)
+    print_point_txt = _build_print_point(output, quiet, len(I))
+    if not quiet:
+        print('Sampling the points ...')
+    V, W = sample_points(kernel, R, I, precision, print_point_txt)
+    if not quiet:
+        print()
+    if error:
+        if not quiet:
+            print('Computing the error and the condition number ...')
+        Error = np.linalg.norm(V)
+        tI = I.reshape(-1,1)
+        M = kernel.g(tI, np.abs(W))*np.exp(1j*np.angle(W)*tI)/np.sqrt(kernel.F(tI, R**2))
+        ConditionNumber = np.linalg.cond(M)
+        if not quiet:
+            print('Error: {0:.3e}'.format(Error))
+            print('Condition number: {0:.3e}'.format(ConditionNumber))
+        if output is not None:
+            output.write('# Error: {0:.3e}\n'.format(Error))
+            output.write('# Condition number: {0:.3e}\n'.format(ConditionNumber))
+        return W, Error, ConditionNumber
+    else:
+        return W
+
+
+## We may now compute the GPP and PPP
+def gen_Ginibre(n_pts, radius): 
+	'''
+	Generates (approximately) n_pts of a Ginibre point process on the centered disk of a given radius.
+	'''
+	X = sample(np.sqrt(n_pts), kernel=kernels['ginibre'], quiet=True)
+	X_gin = np.zeros((len(X), 2))
+	X_gin[:,0] = np.real(X)
+	X_gin[:,1] = np.imag(X)
+	return radius*X_gin/np.sqrt(n_pts)
+
+def gen_Poisson(n_pts, radius): 
+	'''
+	Generates a Poisson point process on the centered disk of a given radius.
+	'''
+	R = radius*np.sqrt(np.random.rand(n_pts))
+	theta = 2*np.pi*np.random.rand(n_pts)
+	X = np.zeros((n_pts, 2))
+	X[:,0] = R*np.cos(theta)
+	X[:,1] = R*np.sin(theta)
+	return X

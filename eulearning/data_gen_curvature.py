@@ -1,7 +1,9 @@
-	import numpy as np
+import numpy as np
 from sklearn.metrics import pairwise_distances
 
-def phi(curvature,u_vect):
+#The following samples a distance matrix between points from a unit disk on a manifold of constant curvature
+
+def phi(curvature,u_vect): #Simulates the radius of a point, CDF inversion method
     if curvature > 0:
         r = (2/np.sqrt(curvature)) * np.arcsin(np.sqrt(u_vect) * np.sin(np.sqrt(curvature)/2))
     if curvature == 0:
@@ -11,12 +13,12 @@ def phi(curvature,u_vect):
     return r    
         
 
-def sample_uniformly(curvature, n_points):
+def sample_uniformly(curvature, n_points): #Generates n points in polar coordinates on the unit disk
     theta = 2 * np.pi * np.random.random_sample((n_points,))
     r = phi(curvature, np.random.random_sample((n_points,)))
     return np.stack((r,theta), axis = -1)
 
-def geodesic_distance(curvature, x1 , x2):
+def geodesic_distance(curvature, x1 , x2): #Computes the geodesic distance between two points
     
     if curvature > 0:
         R = 1/np.sqrt(curvature)
@@ -47,7 +49,7 @@ def geodesic_distance(curvature, x1 , x2):
         
     return dist
 
-def distance_matrix(curvature,n_points):
+def distance_matrix(curvature,n_points): #Samples n points and return their distance matrix for the geodesic distance
     metric = lambda x1, x2 : geodesic_distance(curvature, x1 , x2)
     samples = sample_uniformly(curvature, n_points)
     return pairwise_distances(samples, metric = metric)

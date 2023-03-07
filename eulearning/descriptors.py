@@ -6,7 +6,9 @@ from sklearn.utils 		import assert_all_finite
 
 
 def compute_euler_curve(vec_st, bin_size): 
-	# This version is faster in practice when computing Euler curves. It works similarly as compute_euler_profile, documented below. 
+	'''
+	This version is faster in practice when computing Euler curves. It works similarly as compute_euler_profile, documented below. 
+	'''
 	assert_all_finite(vec_st)
 	assert_all_finite(bin_size)
 
@@ -22,6 +24,8 @@ def compute_euler_curve(vec_st, bin_size):
 
 def compute_euler_profile(vec_st, bin_sizes):
 	'''
+	Computes an Euler characteristic profile from a vectorized simplex tree and a discretization.
+
 	Input:
 		vec_st 		: ndarray containing a vectorized simplex_tree as returned by get_vectorized_st
 		bin_sizes	: list of the form [(low_1, high_1, num_1), ..., (low_k, high_k, num_k)] for a k-parameter Euler characteristic profile
@@ -53,6 +57,8 @@ def compute_euler_profile(vec_st, bin_sizes):
 
 def compute_hybrid_transform(vec_st, bin_sizes, kernel):
 	'''
+	Computes the hybrid transform of the Euler profile associated with a vectorized simplex tree and given a discretization.
+
 	Input:
 		vec_st 		: ndarray containing a vectorized simplex_tree as returned by get_vectorized_st
 		bin_sizes	: list of the form [(low_1, high_1, num_1), ..., (low_k, high_k, num_k)] for a k-parameter hybrid transform
@@ -75,6 +81,8 @@ def compute_hybrid_transform(vec_st, bin_sizes, kernel):
 
 def compute_radon_transform(vec_st, bin_sizes):
 	'''
+	Computes the Radon transform of the Euler profile associated with a vectorized simplex tree and given a discretization.
+
 	Input:
 		vec_st 		: ndarray containing a vectorized simplex_tree as returned by get_vectorized_st
 		bin_sizes	: list of the form [(low_1, high_1, num_1), ..., (low_k, high_k, num_k)] for a k-parameter hybrid transform
@@ -95,10 +103,6 @@ def compute_radon_transform(vec_st, bin_sizes):
 #############################
 # Scikit-learn transformers #
 #############################
-# Modified:
-#	- Deleted params
-#	- Flatten et normalize in __init__
-#	- Added resolution
 
 class EulerCharacteristicProfile(BaseEstimator, TransformerMixin):
 	'''

@@ -11,7 +11,9 @@ from GraphRicciCurvature.FormanRicci 		import FormanRicci
 
 # Technical details
 def cartesian_product(*arrays): 
-	# Given several ndarrays, this function returns a single ndarray of shape (product of input shapes, number of input arrays) and representing the points (in coordinates) of the cartesian product of the arrays in lexicographic order.
+	'''
+	Given several ndarrays, this function returns a single ndarray of shape (product of input shapes, number of input arrays) and representing the points (in coordinates) of the cartesian product of the arrays in lexicographic order.
+	'''
 	la = len(arrays)
 	dtype = np.result_type(*arrays)
 	arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
@@ -22,13 +24,24 @@ def cartesian_product(*arrays):
 # Filtrations and multi-parameter persistence
 ## Point clouds
 def codensity(X, density_to_codensity=lambda x: -x, **kwargs):
+	'''
+	Returns the KDE estimate built on X postcomposed with a decreasing function density_to_codensity.
+	'''
 	density = KernelDensity(**kwargs).fit(X)
 	return density_to_codensity(density.score_samples(X))
 
 ## Graphs
 def compute_vertvals_from_edgevals(n_vertices, edges, edge_vals):
 	'''
-		Assigns value to vertices from values on edges so that the obtained function on the graph is non-decreasing for the face order.
+	Assigns value to vertices from values on edges so that the obtained function on the graph is non-decreasing for the face order.
+	
+	Input:
+		n_vertices	: int, number of vertices in the graph
+		edges		: list ot tuple (u,v) representing an edge of the graph between vertices u and v.
+		edge_vals	: ndarray containing the values of a function given on edges of the graph. Values should be ordered in the same order as the list edges.
+	
+	Output
+		vert_vals	: ndarray containing the values of the function on vertices of the graph. Values are computed so that the overall function on the graph is non-decreasing for the face order.
 	'''
 	vert_vals = edge_vals.max() * np.ones(n_vertices) 		# By convention, make the vertices with degree 0 appear at last
 	if len(edges) == len(edge_vals):						# Rarely, the Ollivier-Ricci curvature does not assign a value to some edges
@@ -42,7 +55,8 @@ def compute_vertvals_from_edgevals(n_vertices, edges, edge_vals):
 	else:
 		return vert_vals
 
-def compute_FR_curvature(A): # Computes Forman-Ricci 
+### We define below several filtrations on graphs. Functions all output a ndarray of shape (N_v,) where N_v is the number of vertices in the graph.
+def compute_FR_curvature(A): # Computes Forman-Ricci curvature
 	G = nx.to_networkx_graph(A)
 	n_vertices = G.number_of_nodes()
 	orc = FormanRicci(G)
@@ -53,7 +67,7 @@ def compute_FR_curvature(A): # Computes Forman-Ricci
 		return np.zeros(n_vertices)
 	return get_vertvals_from_edgevals(n_vertices, list(G.edges()), curv_edges)
 
-def compute_OR_curvature(A, alpha=0.5, iterations=0): # Computes Ollivier-Ricci flow if iterations>0
+def compute_OR_curvature(A, alpha=0.5, iterations=0): # Computes Ollivier-Ricci curvature if iterations=0 and Ollivier-Ricci flow if iterations>0
 	G = nx.to_networkx_graph(A)
 	n_vertices = G.number_of_nodes()
 	orc = OllivierRicci(G, alpha=alpha)
@@ -93,6 +107,8 @@ def compute_edge_betweenness(A): # Compute edge betweenness
 # Vectorize simplex trees
 def vectorize_st(st, filtrations=None):
 	'''
+	Vectorize a simplex tree from the Gudhi library.
+
 	Input:
 		st 				: Simplex tree from the Gudhi library
 		filtrations		: None or List of ndarrays of size (st.num_simplices(),) or (st.num_vertices(),). 
